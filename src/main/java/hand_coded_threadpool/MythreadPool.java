@@ -29,12 +29,13 @@ public class MythreadPool {
 等待多久？
   * */
 
-    public MythreadPool(int max_size, int coreSize, int timeout, TimeUnit timeUnit, BlockingQueue<Runnable> BQ) {
+    public MythreadPool(int max_size, int coreSize, int timeout, TimeUnit timeUnit, BlockingQueue<Runnable> BQ,RejectMethod rejectMethod) {
         this.max_size = max_size;
         this.coreSize = coreSize;
         this.timeout = timeout;
         this.timeUnit = timeUnit;
         this.BQ=BQ;
+        this.rejectMethod=rejectMethod;
 
     }
 
@@ -42,7 +43,10 @@ public class MythreadPool {
     private int coreSize;
     private int timeout;
     private TimeUnit timeUnit;
-    public final BlockingQueue<Runnable> BQ;
+    public final BlockingQueue<Runnable> BQ;//这是所有执行任务的列表
+
+
+    private RejectMethod rejectMethod;
 
     List<Thread> coreList=new ArrayList<>();
     List<Thread> supList=new ArrayList<>();
@@ -60,9 +64,8 @@ public class MythreadPool {
         }
         //原子操作，或者加锁，否则这里有线程安全
         //
-        if(BQ.offer(task)){
-            return;
-        }
+        if(BQ.offer(task)) return;
+
         //如果加失败了且辅助线程没满，就加辅助线程
         if(coreList.size()+supList.size()<max_size){
 
@@ -74,7 +77,7 @@ public class MythreadPool {
         //如果走了上一步，那么还没加进阻塞队列里，要知道一个execute的最终目的就是“把线程合理加到阻塞队列里的方案”，所以这里要补加
         //这里加不上那就说明俩集合都满了，超过最大容量了
         if(!BQ.offer(task)){
-            throw new RuntimeException("BlockingQ is full!");
+            rejectMethod.reject(task,this);
             //这里可以替换为不同的拒绝策略，意思就是我加两次都失败了
         }
     }
