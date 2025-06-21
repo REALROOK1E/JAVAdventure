@@ -39,9 +39,9 @@ public class MythreadPool {
 
     }
 
-    private int max_size;
-    private int coreSize;
-    private int timeout;
+    private final int max_size;
+    private final int coreSize;
+    private final int timeout;
     private TimeUnit timeUnit;
     public final BlockingQueue<Runnable> BQ;//这是所有执行任务的列表
 
@@ -54,8 +54,6 @@ public class MythreadPool {
 
 
     void execute(Runnable task){
-        //“把线程合理加到阻塞队列里的方案”,目的是加进队列里
-        //如果核心线程没满，就加核心线程
         if(coreList.size()<coreSize){
             Thread thread=new coreThread(task);
 
@@ -63,23 +61,16 @@ public class MythreadPool {
             thread.start();
         }
         //原子操作，或者加锁，否则这里有线程安全
-        //
         if(BQ.offer(task)) return;
 
-        //如果加失败了且辅助线程没满，就加辅助线程
         if(coreList.size()+supList.size()<max_size){
-
                 Thread thread=new supThread(task);
                 supList.add(thread);
                 thread.start();
+        }
+        if(!BQ.offer(task)) rejectMethod.reject(task,this);
 
-        }
-        //如果走了上一步，那么还没加进阻塞队列里，要知道一个execute的最终目的就是“把线程合理加到阻塞队列里的方案”，所以这里要补加
-        //这里加不上那就说明俩集合都满了，超过最大容量了
-        if(!BQ.offer(task)){
-            rejectMethod.reject(task,this);
-            //这里可以替换为不同的拒绝策略，意思就是我加两次都失败了
-        }
+
     }
 
     class coreThread extends Thread{
@@ -93,7 +84,6 @@ public class MythreadPool {
             while(true){
                   try {
                 Runnable task=BQ.take();//这里take方法是一直阻塞
-
                 task.run();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
